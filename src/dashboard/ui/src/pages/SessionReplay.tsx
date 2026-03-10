@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 interface Session {
@@ -40,6 +40,8 @@ export default function SessionReplay() {
     const [sortDir, setSortDir] = useState<SortDir>('asc');
     const [ganttVisible, setGanttVisible] = useState(true);
 
+    const expandedRowRef = useRef<HTMLTableRowElement>(null);
+
     const handleSelectSession = (id: string) => {
         setSearchParams({ id });
     };
@@ -76,6 +78,12 @@ export default function SessionReplay() {
             })
             .catch(() => { });
     }, [selected, searchParams]);
+
+    useEffect(() => {
+        if (expandedCall && expandedRowRef.current) {
+            expandedRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, [expandedCall]);
 
     const sortedCalls = useMemo(() => {
         const sorted = [...calls].sort((a, b) => {
@@ -223,7 +231,7 @@ export default function SessionReplay() {
                                                     </td>
                                                 </tr>
                                                 {expandedCall === call.id && (
-                                                    <tr>
+                                                    <tr ref={expandedRowRef}>
                                                         <td colSpan={5} style={{ padding: 0 }}>
                                                             <div className="call-detail">
                                                                 {call.response?.truncated && (
