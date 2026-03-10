@@ -6,7 +6,7 @@ MCP Monitor intercepts every tool call made by an AI agent — whether the agent
 
 **Zero changes to your agent. Zero changes to your MCP servers.**
 
-![Dashboard Live Feed](src/dashboard/ui/src/pages/LiveFeed.tsx)
+![Dashboard Live Feed](docs/dashboard-live-feed.png)
 
 ---
 
