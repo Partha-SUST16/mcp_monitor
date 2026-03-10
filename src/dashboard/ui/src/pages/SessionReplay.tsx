@@ -30,10 +30,9 @@ function formatTime(ts: string) {
 
 export default function SessionReplay() {
     const [searchParams, setSearchParams] = useSearchParams();
-    const initialSessionId = searchParams.get('id');
+    const selected = searchParams.get('id');
 
     const [sessions, setSessions] = useState<Session[]>([]);
-    const [selected, setSelected] = useState<string | null>(initialSessionId);
     const [calls, setCalls] = useState<ToolCall[]>([]);
     const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
     const [expandedCall, setExpandedCall] = useState<number | null>(null);
@@ -42,7 +41,6 @@ export default function SessionReplay() {
     const [ganttVisible, setGanttVisible] = useState(true);
 
     const handleSelectSession = (id: string) => {
-        setSelected(id);
         setSearchParams({ id });
     };
 
