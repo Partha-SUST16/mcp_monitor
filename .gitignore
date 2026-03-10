@@ -10,3 +10,4 @@ src/dashboard/ui/node_modules/
 *-lock.json
 *.lock
 mcp-monitor-master-plan.md
+.DS_Store
