@@ -6,6 +6,11 @@
   "bin": {
     "mcp-monitor": "./dist/cli.js"
   },
+  "files": [
+    "dist",
+    "src/dashboard/ui/dist",
+    "mcp-monitor.config.json"
+  ],
   "scripts": {
     "build": "tsc && npm run build --prefix src/dashboard/ui",
     "dev": "ts-node src/cli.ts",
