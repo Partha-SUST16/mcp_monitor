@@ -1,15 +1,30 @@
 import { spawn, ChildProcess } from 'child_process';
-import { collector } from '../../core/Collector';
-import { sessionManager } from '../../core/SessionManager';
+import { CollectorEvent } from '../../types';
 import { ProtocolInterceptor } from './ProtocolInterceptor';
+
+interface CollectorLike {
+    handle(e: CollectorEvent): void;
+}
+
+interface SessionManagerLike {
+    getOrCreate(key: string, isInit?: boolean): string;
+    endSession?(key: string): void;
+}
 
 export class StdioProxy {
     private child: ChildProcess | null = null;
     private interceptor: ProtocolInterceptor;
 
-    constructor(private config: { name: string; command: string; env?: Record<string, string> }) {
-        this.interceptor = new ProtocolInterceptor(config.name, collector, sessionManager);
+    constructor(
+        private config: { name: string; command: string; env?: Record<string, string> },
+        collector: CollectorLike,
+        sessionMgr: SessionManagerLike,
+    ) {
+        this.interceptor = new ProtocolInterceptor(config.name, collector, sessionMgr);
+        this._sessionMgr = sessionMgr;
     }
+
+    private _sessionMgr: SessionManagerLike;
 
     start() {
         const [cmd, ...args] = this.config.command.split(' ');
@@ -29,7 +44,7 @@ export class StdioProxy {
         });
 
         this.child.on('exit', (code) => {
-            sessionManager.endSession(this.config.name);
+            this._sessionMgr.endSession?.(this.config.name);
             process.exit(code ?? 0);
         });
 

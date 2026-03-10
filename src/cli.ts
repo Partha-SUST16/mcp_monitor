@@ -6,6 +6,10 @@ import { StdioProxy } from './ingestion/mcp/StdioProxy';
 import { HttpProxy } from './ingestion/mcp/HttpProxy';
 import { AlertEngine } from './core/AlertEngine';
 import { store } from './core/Store';
+import { collector } from './core/Collector';
+import { sessionManager } from './core/SessionManager';
+import { RemoteCollector } from './core/RemoteCollector';
+import { v4 as randomUUID } from 'uuid';
 
 const program = new Command();
 
@@ -28,7 +32,7 @@ program
         for (const server of config.servers) {
             if (server.transport === 'stdio' && server.command) {
                 console.error(`[mcp-monitor] Starting stdio proxy for ${server.name}`);
-                new StdioProxy({ name: server.name, command: server.command, env: server.env }).start();
+                new StdioProxy({ name: server.name, command: server.command, env: server.env }, collector, sessionManager).start();
             } else if (server.transport === 'http' && server.targetUrl) {
                 console.error(`[mcp-monitor] Starting HTTP proxy for ${server.name}`);
                 new HttpProxy({
@@ -46,11 +50,17 @@ program
     .requiredOption('--name <name>', 'logical name for this server')
     .requiredOption('--cmd <command>', 'command to spawn the real MCP server')
     .option('--session-id <id>', 'explicit session ID')
+    .option('--dashboard-url <url>', 'dashboard server URL', 'http://localhost:4242')
     .action((opts) => {
-        if (opts.sessionId) {
-            process.env.MCP_MONITOR_SESSION_ID = opts.sessionId;
-        }
-        const proxy = new StdioProxy({ name: opts.name, command: opts.cmd });
+        const remoteCollector = new RemoteCollector(opts.dashboardUrl);
+
+        // Lightweight in-memory session manager (no SQLite dependency)
+        const sessionId = opts.sessionId ?? process.env.MCP_MONITOR_SESSION_ID ?? randomUUID();
+        const lightSessionMgr = {
+            getOrCreate(_key: string, _isInit?: boolean) { return sessionId; },
+        };
+
+        const proxy = new StdioProxy({ name: opts.name, command: opts.cmd }, remoteCollector, lightSessionMgr);
         proxy.start();
     });
 
