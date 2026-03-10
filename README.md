@@ -28,7 +28,7 @@ MCP Monitor intercepts every tool call made by an AI agent — whether the agent
 ```
 Agent (Claude, Cursor, etc.)
     │
-    ├── Multiplexer mode (recommended)
+    ├── Multiplexer mode
     │     mcp-monitor serve
     │       ├── spawns Server A ──┐
     │       ├── spawns Server B ──┤── POST /api/ingest ──► Dashboard Server ──► SQLite
@@ -41,7 +41,7 @@ Agent (Claude, Cursor, etc.)
     └── Python SDK ──► POST /api/ingest
 ```
 
-**Multiplexer mode** is the recommended approach: add one entry to your MCP config and monitor all servers. The `serve` command spawns every configured server, merges their tools, routes calls, and records everything.
+**Multiplexer mode** is the one approach: add one entry to your MCP config and monitor all servers. The `serve` command spawns every configured server, merges their tools, routes calls, and records everything.
 
 **Per-server proxy mode** wraps a single server — useful when you want fine-grained control over which servers are monitored.
 
