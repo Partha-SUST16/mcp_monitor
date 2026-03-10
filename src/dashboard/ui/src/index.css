@@ -242,6 +242,16 @@ thead th {
   color: var(--text-muted);
   border-bottom: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.15);
+  user-select: none;
+  transition: color 0.15s;
+}
+
+thead th[style*="cursor"] {
+  color: var(--text-secondary);
+}
+
+thead th:hover {
+  color: var(--text-primary);
 }
 
 tbody tr {

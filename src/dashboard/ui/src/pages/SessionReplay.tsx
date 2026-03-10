@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 interface Session {
     id: string;
@@ -20,6 +20,9 @@ interface ToolCall {
     errorMsg?: string;
 }
 
+type SortField = 'timestamp' | 'toolName' | 'status' | 'latencyMs';
+type SortDir = 'asc' | 'desc';
+
 function formatTime(ts: string) {
     return new Date(ts).toLocaleTimeString();
 }
@@ -30,6 +33,8 @@ export default function SessionReplay() {
     const [calls, setCalls] = useState<ToolCall[]>([]);
     const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
     const [expandedCall, setExpandedCall] = useState<number | null>(null);
+    const [sortField, setSortField] = useState<SortField>('timestamp');
+    const [sortDir, setSortDir] = useState<SortDir>('asc');
 
     useEffect(() => {
         fetch('/api/sessions?limit=50')
@@ -45,11 +50,49 @@ export default function SessionReplay() {
             .then(d => {
                 setSessionInfo(d.session);
                 setCalls(d.calls);
+                setExpandedCall(null);
+                setSortField('timestamp');
+                setSortDir('asc');
             })
             .catch(() => { });
     }, [selected]);
 
+    const sortedCalls = useMemo(() => {
+        const sorted = [...calls].sort((a, b) => {
+            let cmp = 0;
+            switch (sortField) {
+                case 'timestamp': cmp = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(); break;
+                case 'toolName': cmp = a.toolName.localeCompare(b.toolName); break;
+                case 'status': cmp = a.status.localeCompare(b.status); break;
+                case 'latencyMs': cmp = a.latencyMs - b.latencyMs; break;
+            }
+            return sortDir === 'asc' ? cmp : -cmp;
+        });
+        return sorted;
+    }, [calls, sortField, sortDir]);
+
+    const toggleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortField(field);
+            setSortDir(field === 'latencyMs' ? 'desc' : 'asc');
+        }
+    };
+
+    const sortIcon = (field: SortField) => {
+        if (sortField !== field) return ' ↕';
+        return sortDir === 'asc' ? ' ↑' : ' ↓';
+    };
+
     const maxLatency = Math.max(...calls.map(c => c.latencyMs), 1);
+
+    // Waterfall chart: position bars by start time relative to session, width by duration
+    const sessionStart = calls.length > 0 ? Math.min(...calls.map(c => new Date(c.timestamp).getTime())) : 0;
+    const sessionEnd = calls.length > 0
+        ? Math.max(...calls.map(c => new Date(c.timestamp).getTime() + c.latencyMs))
+        : 1;
+    const sessionSpan = Math.max(sessionEnd - sessionStart, 1);
 
     return (
         <div>
@@ -98,20 +141,31 @@ export default function SessionReplay() {
 
                             {calls.length > 0 && (
                                 <div className="gantt-chart">
-                                    {calls.slice(0, 20).map((call) => (
-                                        <div key={call.id} className="gantt-bar" style={{ background: 'var(--bg-input)' }}>
-                                            <div
-                                                className="gantt-bar-fill"
-                                                style={{
-                                                    width: `${Math.max((call.latencyMs / maxLatency) * 100, 2)}%`,
-                                                    background: call.status === 'error'
-                                                        ? 'var(--error)'
-                                                        : 'var(--gradient-1)',
-                                                }}
-                                            />
-                                            <span className="gantt-bar-label">{call.toolName}</span>
-                                        </div>
-                                    ))}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'SF Mono, Fira Code, monospace' }}>
+                                        <span>0ms</span>
+                                        <span>{Math.round(sessionSpan / 2)}ms</span>
+                                        <span>{Math.round(sessionSpan)}ms</span>
+                                    </div>
+                                    {calls.slice(0, 20).map((call) => {
+                                        const callStart = new Date(call.timestamp).getTime() - sessionStart;
+                                        const leftPct = (callStart / sessionSpan) * 100;
+                                        const widthPct = Math.max((call.latencyMs / sessionSpan) * 100, 1.5);
+                                        return (
+                                            <div key={call.id} className="gantt-bar" style={{ background: 'var(--bg-input)' }}>
+                                                <div
+                                                    className="gantt-bar-fill"
+                                                    style={{
+                                                        left: `${leftPct}%`,
+                                                        width: `${widthPct}%`,
+                                                        background: call.status === 'error'
+                                                            ? 'var(--error)'
+                                                            : 'var(--gradient-1)',
+                                                    }}
+                                                />
+                                                <span className="gantt-bar-label">{call.toolName} ({call.latencyMs}ms)</span>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
 
@@ -119,15 +173,23 @@ export default function SessionReplay() {
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th>Time</th>
-                                            <th>Tool</th>
-                                            <th>Status</th>
-                                            <th>Latency</th>
+                                            <th onClick={() => toggleSort('timestamp')} style={{ cursor: 'pointer' }}>
+                                                Time{sortIcon('timestamp')}
+                                            </th>
+                                            <th onClick={() => toggleSort('toolName')} style={{ cursor: 'pointer' }}>
+                                                Tool{sortIcon('toolName')}
+                                            </th>
+                                            <th onClick={() => toggleSort('status')} style={{ cursor: 'pointer' }}>
+                                                Status{sortIcon('status')}
+                                            </th>
+                                            <th onClick={() => toggleSort('latencyMs')} style={{ cursor: 'pointer' }}>
+                                                Latency{sortIcon('latencyMs')}
+                                            </th>
                                             <th style={{ width: '30%' }}>Duration</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {calls.map(call => (
+                                        {sortedCalls.map(call => (
                                             <React.Fragment key={call.id}>
                                                 <tr
                                                     onClick={() => setExpandedCall(expandedCall === call.id ? null : call.id)}
