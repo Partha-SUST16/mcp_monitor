@@ -5,3 +5,4 @@ dist/
 *.db-shm
 .env
 src/dashboard/ui/dist/
+src/dashboard/ui/node_modules/
