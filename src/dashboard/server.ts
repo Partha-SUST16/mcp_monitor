@@ -47,7 +47,7 @@ export function createDashboardServer(port: number) {
     });
 
     // Serve React UI build output
-    const uiDistPath = path.join(__dirname, 'ui', 'dist');
+    const uiDistPath = path.resolve(__dirname, '..', '..', 'src', 'dashboard', 'ui', 'dist');
     app.use(express.static(uiDistPath));
     app.get('{*path}', (_req: Request, res: Response) => {
         res.sendFile(path.join(uiDistPath, 'index.html'), (err) => {
