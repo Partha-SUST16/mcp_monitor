@@ -9,3 +9,4 @@ src/dashboard/ui/node_modules/
 *.pyc
 *-lock.json
 *.lock
+mcp-monitor-master-plan.md

@@ -1,4 +1,4 @@
-export type AgentType = 'mcp-stdio' | 'mcp-http' | 'python-sdk';
+export type AgentType = 'mcp-stdio' | 'mcp-http' | 'python-sdk' | 'agent-proxy' | 'cline' | 'cursor' | 'other';
 export type CallStatus = 'success' | 'error' | 'timeout';
 export type AlertMetric = 'latency_p95' | 'error_rate';
 

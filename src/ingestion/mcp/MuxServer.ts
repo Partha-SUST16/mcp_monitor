@@ -28,7 +28,7 @@ interface ChildServer {
 
 export class MuxServer {
     private children = new Map<string, ChildServer>();
-    private toolToServer = new Map<string, string>();
+    private toolToServer = new Map<string, { server: string, originalName: string }>();
     private pendingCalls = new Map<string, PendingCall>();
     private collector: RemoteCollector;
     private sessionId: string;
@@ -216,8 +216,9 @@ export class MuxServer {
                 if (res.result?.tools) {
                     child.tools = res.result.tools;
                     for (const tool of res.result.tools) {
-                        this.toolToServer.set(tool.name, child.name);
-                        allTools.push(tool);
+                        const prefixedName = `${child.name}_${tool.name}`;
+                        this.toolToServer.set(prefixedName, { server: child.name, originalName: tool.name });
+                        allTools.push({ ...tool, name: prefixedName });
                     }
                 }
             } catch { /* skip unresponsive children */ }
@@ -228,43 +229,43 @@ export class MuxServer {
     }
 
     private async handleToolsCall(msg: any) {
-        const toolName = msg.params?.name;
-        const serverName = this.toolToServer.get(toolName);
+        const requestedToolName = msg.params?.name;
+        const mapping = this.toolToServer.get(requestedToolName);
 
-        if (!serverName) {
-            this.sendToAgent({ jsonrpc: '2.0', id: msg.id, error: { code: -32602, message: `Unknown tool: ${toolName}` } });
+        if (!mapping) {
+            this.sendToAgent({ jsonrpc: '2.0', id: msg.id, error: { code: -32602, message: `Unknown tool: ${requestedToolName}` } });
             return;
         }
 
-        const child = this.children.get(serverName);
+        const child = this.children.get(mapping.server);
         if (!child) {
-            this.sendToAgent({ jsonrpc: '2.0', id: msg.id, error: { code: -32603, message: `Server ${serverName} not available` } });
+            this.sendToAgent({ jsonrpc: '2.0', id: msg.id, error: { code: -32603, message: `Server ${mapping.server} not available` } });
             return;
         }
 
         const startTime = Date.now();
         const timestamp = new Date().toISOString();
 
-        const res = await this.sendToChild(child, { method: 'tools/call', params: msg.params });
+        // Pass the original tool name to the child
+        const callParams = { ...msg.params, name: mapping.originalName };
+        const res = await this.sendToChild(child, { method: 'tools/call', params: callParams });
 
         const latencyMs = Date.now() - startTime;
         const status = res.error ? 'error' : 'success';
 
-        // Record the tool call
-        const event: CollectorEvent = {
+        this.collector.handle({
             sessionId: this.sessionId,
-            agentType: 'mcp-stdio',
-            serverName,
-            toolName,
+            agentType: 'agent-proxy',
+            serverName: mapping.server,
+            toolName: mapping.originalName,
             method: 'tools/call',
-            arguments: msg.params?.arguments ?? {},
-            response: res.result ?? null,
-            status: status as any,
+            arguments: msg.params,
+            response: res.error ?? res.result,
+            errorMsg: res.error ? JSON.stringify(res.error) : undefined,
+            status,
             latencyMs,
             timestamp,
-            errorMsg: res.error?.message,
-        };
-        this.collector.handle(event);
+        });
 
         this.sendToAgent({ jsonrpc: '2.0', id: msg.id, result: res.result, error: res.error });
     }

@@ -14,10 +14,25 @@ const DEFAULT_CONFIG: Config = {
 };
 
 export function loadConfig(configPath?: string): Config {
-    const resolved = configPath ?? path.join(process.cwd(), 'mcp-monitor.config.json');
+    // Resolution chain
+    const pathsToTry = configPath
+        ? [path.resolve(process.cwd(), configPath)]
+        : [
+            path.join(process.cwd(), 'mcp-monitor.config.json'),
+            path.join(__dirname, '..', 'mcp-monitor.config.json'),
+            path.join(__dirname, '..', '..', 'mcp-monitor.config.json')
+        ];
 
-    if (!fs.existsSync(resolved)) {
-        console.error(`[config] No config file found at ${resolved}, using defaults`);
+    let resolved = '';
+    for (const p of pathsToTry) {
+        if (fs.existsSync(p)) {
+            resolved = p;
+            break;
+        }
+    }
+
+    if (!resolved) {
+        console.error(`[config] No config file found in tried paths:\n${pathsToTry.map(p => `  - ${p}`).join('\n')}\nUsing defaults.`);
         return DEFAULT_CONFIG;
     }
 

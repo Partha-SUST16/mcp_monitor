@@ -70,6 +70,11 @@ program
     .option('-c, --config <path>', 'config file path', './mcp-monitor.config.json')
     .option('--dashboard-url <url>', 'dashboard server URL', 'http://localhost:4242')
     .action(async (opts) => {
+        console.warn(`
+⚠️  WARNING: You are running 'mcp-monitor serve'.
+This runs a pure MCP server that aggregates other MCP servers.
+It DOES NOT start the dashboard. If you want the dashboard, run 'mcp-monitor start' instead.
+`);
         const { MuxServer } = await import('./ingestion/mcp/MuxServer');
         const config = loadConfig(opts.config);
         const mux = new MuxServer(config.servers, opts.dashboardUrl);

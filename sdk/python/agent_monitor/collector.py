@@ -78,7 +78,10 @@ def record(
     threading.Thread(target=_post, args=(payload,), daemon=True).start()
 
 
+_consecutive_failures = 0
+
 def _post(payload: dict):
+    global _consecutive_failures
     try:
         import urllib.request
         data = json.dumps(payload).encode('utf-8')
@@ -89,5 +92,15 @@ def _post(payload: dict):
             method="POST"
         )
         urllib.request.urlopen(req, timeout=2)
-    except Exception:
-        pass
+        if _consecutive_failures > 0:
+            import logging
+            logging.info("[agent-monitor] Connection to dashboard restored.")
+            _consecutive_failures = 0
+    except Exception as e:
+        _consecutive_failures += 1
+        if _consecutive_failures == 5:
+            import logging
+            logging.warning(
+                f"[agent-monitor] Failed to reach dashboard at {MONITOR_URL} for 5 consecutive calls. "
+                f"Telemetry is being dropped. Ensure the monitor is running with 'npx mcp-monitor start'. (Error: {e})"
+            )
