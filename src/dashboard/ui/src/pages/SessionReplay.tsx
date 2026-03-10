@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface Session {
     id: string;
@@ -128,9 +128,8 @@ export default function SessionReplay() {
                                     </thead>
                                     <tbody>
                                         {calls.map(call => (
-                                            <>
+                                            <React.Fragment key={call.id}>
                                                 <tr
-                                                    key={call.id}
                                                     onClick={() => setExpandedCall(expandedCall === call.id ? null : call.id)}
                                                     style={{ cursor: 'pointer' }}
                                                 >
@@ -152,7 +151,7 @@ export default function SessionReplay() {
                                                     </td>
                                                 </tr>
                                                 {expandedCall === call.id && (
-                                                    <tr key={`${call.id}-detail`}>
+                                                    <tr>
                                                         <td colSpan={5} style={{ padding: 0 }}>
                                                             <div className="call-detail">
                                                                 {call.response?.truncated && (
@@ -180,7 +179,7 @@ export default function SessionReplay() {
                                                         </td>
                                                     </tr>
                                                 )}
-                                            </>
+                                            </React.Fragment>
                                         ))}
                                     </tbody>
                                 </table>
