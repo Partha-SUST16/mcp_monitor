@@ -35,6 +35,7 @@ export default function SessionReplay() {
     const [expandedCall, setExpandedCall] = useState<number | null>(null);
     const [sortField, setSortField] = useState<SortField>('timestamp');
     const [sortDir, setSortDir] = useState<SortDir>('asc');
+    const [ganttVisible, setGanttVisible] = useState(true);
 
     useEffect(() => {
         fetch('/api/sessions?limit=50')
@@ -129,14 +130,21 @@ export default function SessionReplay() {
                             {sessionInfo && (
                                 <div className="card-header">
                                     <h3>{sessionInfo.serverName} — {formatTime(sessionInfo.startedAt)}</h3>
-                                    <span className="badge badge-accent">{calls.length} calls</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="badge badge-accent">{calls.length} calls</span>
+                                        {calls.length > 0 && (
+                                            <button className="btn" onClick={() => setGanttVisible(v => !v)} style={{ padding: '4px 10px', fontSize: '11px' }}>
+                                                {ganttVisible ? '▲ Hide Chart' : '▼ Show Chart'}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
-                            {calls.length > 0 && (
+                            {calls.length > 0 && ganttVisible && (
                                 <div className="gantt-chart">
                                     {calls.slice(0, 20).map((call) => (
-                                        <div key={call.id} className="gantt-bar" style={{ background: 'var(--bg-input)' }}>
+                                        <div key={call.id} className="gantt-bar" title={`${call.toolName} — ${call.latencyMs}ms`} style={{ background: 'var(--bg-input)' }}>
                                             <div
                                                 className="gantt-bar-fill"
                                                 style={{
