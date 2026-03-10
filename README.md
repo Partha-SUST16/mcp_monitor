@@ -57,8 +57,8 @@ Agent (Claude, Cursor, etc.)
 ### Install & Run
 
 ```bash
-git clone <repo-url> mcp-monitor
-cd mcp-monitor
+git clone https://github.com/Partha-SUST16/mcp_monitor.git
+cd mcp_monitor
 
 # Install backend dependencies
 npm install
