@@ -65,6 +65,18 @@ program
     });
 
 program
+    .command('serve')
+    .description('Run as a multiplexing MCP server — aggregates all configured servers behind one entry')
+    .option('-c, --config <path>', 'config file path', './mcp-monitor.config.json')
+    .option('--dashboard-url <url>', 'dashboard server URL', 'http://localhost:4242')
+    .action(async (opts) => {
+        const { MuxServer } = await import('./ingestion/mcp/MuxServer');
+        const config = loadConfig(opts.config);
+        const mux = new MuxServer(config.servers, opts.dashboardUrl);
+        await mux.start();
+    });
+
+program
     .command('sessions')
     .description('List recent sessions')
     .option('--limit <n>', 'number of sessions', '20')
