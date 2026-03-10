@@ -1,0 +1,10 @@
+[project]
+name = "agent-monitor"
+version = "0.1.0"
+description = "Observability SDK for Python AI agents — pairs with mcp-monitor"
+requires-python = ">=3.9"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
