@@ -49,7 +49,7 @@ export function createDashboardServer(port: number) {
     // Serve React UI build output
     const uiDistPath = path.join(__dirname, 'ui', 'dist');
     app.use(express.static(uiDistPath));
-    app.get('*', (_req: Request, res: Response) => {
+    app.get('{*path}', (_req: Request, res: Response) => {
         res.sendFile(path.join(uiDistPath, 'index.html'), (err) => {
             if (err) {
                 res.status(200).send('Dashboard UI not built yet. Run the UI build first.');
