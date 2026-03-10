@@ -583,6 +583,7 @@ tbody td {
   position: absolute;
   min-width: 2px;
   transition: width 0.3s;
+  pointer-events: none;
 }
 
 .gantt-bar-label {
@@ -594,6 +595,7 @@ tbody td {
   color: white;
   white-space: nowrap;
   z-index: 1;
+  pointer-events: none;
 }
 
 .pulse-dot {
