@@ -27,18 +27,24 @@ MCP Monitor intercepts every tool call made by an AI agent — whether the agent
 ## Architecture
 
 ```
-Agent (Claude, Cursor, Python)
+Agent (Claude, Cursor, etc.)
     │
-    ├── MCP stdio ──► StdioProxy ──┐
-    ├── MCP HTTP  ──► HttpProxy  ──┤── collector.handle() ──► SQLite
-    └── Python fn ──► Python SDK ──┘         │
-                                        EventBus.emit()
-                                             │
-                                        SSE push to
-                                        Dashboard UI
+    ├── Multiplexer mode (recommended)
+    │     mcp-monitor serve
+    │       ├── spawns Server A ──┐
+    │       ├── spawns Server B ──┤── POST /api/ingest ──► Dashboard Server ──► SQLite
+    │       └── spawns Server C ──┘         │
+    │                                  EventBus.emit()
+    ├── Per-server proxy mode                │
+    │     mcp-monitor proxy             SSE push to
+    │       └── spawns Server ──────►   Dashboard UI
+    │
+    └── Python SDK ──► POST /api/ingest
 ```
 
-**Core constraint:** SQLite has exactly one writer (the Collector). The StdioProxy and HttpProxy call `collector.handle()` directly (in-process). The Python SDK POSTs to `/api/ingest` over HTTP.
+**Multiplexer mode** is the recommended approach: add one entry to your MCP config and monitor all servers. The `serve` command spawns every configured server, merges their tools, routes calls, and records everything.
+
+**Per-server proxy mode** wraps a single server — useful when you want fine-grained control over which servers are monitored.
 
 ---
 
@@ -61,8 +67,11 @@ npm install
 # Install and build the dashboard UI
 cd src/dashboard/ui && npm install && npx vite build && cd ../../..
 
-# Start the monitor
-npx ts-node src/cli.ts start
+# Build and link globally
+npm run build && npm link
+
+# Start the dashboard server
+mcp-monitor start
 ```
 
 The dashboard will be available at **http://localhost:4242**.
@@ -90,9 +99,46 @@ curl -X POST http://localhost:4242/api/ingest \
 
 ## Connecting Agents
 
-### Claude Desktop / Claude Code
+### Multiplexer Mode (Recommended)
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Monitor **all** MCP servers with a single config entry. No need to wrap each server individually.
+
+**Step 1.** List your servers in `mcp-monitor.config.json`:
+
+```json
+{
+  "servers": [
+    { "name": "filesystem", "transport": "stdio", "command": "npx @modelcontextprotocol/server-filesystem /tmp" },
+    { "name": "github", "transport": "stdio", "command": "npx @modelcontextprotocol/server-github", "env": { "GITHUB_TOKEN": "$GITHUB_TOKEN" } }
+  ],
+  "dashboard": { "port": 4242 }
+}
+```
+
+**Step 2.** Replace all MCP server entries in your agent config with one:
+
+```json
+{
+  "mcpServers": {
+    "mcp-monitor": {
+      "command": "mcp-monitor",
+      "args": ["serve", "-c", "/absolute/path/to/mcp-monitor.config.json"]
+    }
+  }
+}
+```
+
+**Step 3.** Start the dashboard server separately:
+
+```bash
+mcp-monitor start
+```
+
+The agent sees one MCP server with all tools combined. MCP Monitor spawns each real server internally, routes every `tools/call` to the correct child, and records the call.
+
+### Per-Server Proxy Mode
+
+Alternatively, wrap individual servers by replacing their command:
 
 ```json
 {
@@ -105,8 +151,6 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
   }
 }
 ```
-
-The agent connects to `mcp-monitor` as if it were the MCP server. The proxy spawns the real server, pipes stdin/stdout through, and records every JSON-RPC call.
 
 ### Python Agent (QwenAgent)
 
@@ -182,23 +226,26 @@ Environment variable substitution is supported in `env` fields — `$VAR_NAME` i
 ## CLI Commands
 
 ```bash
-# Start monitoring all configured servers + dashboard
-npx ts-node src/cli.ts start [-c path/to/config.json]
+# Start dashboard server + alert engine
+mcp-monitor start [-c path/to/config.json]
 
-# Start a single MCP proxy (used in agent config)
-npx ts-node src/cli.ts proxy --name filesystem --cmd "npx @modelcontextprotocol/server-filesystem /tmp"
+# Run as a multiplexing MCP server (add as single entry in agent config)
+mcp-monitor serve [-c path/to/config.json] [--dashboard-url http://localhost:4242]
+
+# Start a single MCP proxy (wrap one server)
+mcp-monitor proxy --name filesystem --cmd "npx @modelcontextprotocol/server-filesystem /tmp"
 
 # List recent sessions
-npx ts-node src/cli.ts sessions [--limit 20]
+mcp-monitor sessions [--limit 20]
 
 # Replay a session's tool calls
-npx ts-node src/cli.ts replay <session-id>
+mcp-monitor replay <session-id>
 
 # Show per-tool stats
-npx ts-node src/cli.ts stats [--sort latency_p95|error_rate|call_count] [--since 1h|6h|24h|7d]
+mcp-monitor stats [--sort latency_p95|error_rate|call_count] [--since 1h|6h|24h|7d]
 
 # Export data
-npx ts-node src/cli.ts export [--format json|csv] [--since 24h] [--output file.json]
+mcp-monitor export [--format json|csv] [--since 24h] [--output file.json]
 ```
 
 ---
@@ -229,11 +276,13 @@ mcp-monitor/
 │   ├── core/
 │   │   ├── Store.ts                      # SQLite (better-sqlite3) CRUD
 │   │   ├── Collector.ts                  # Sanitize → truncate → persist → emit
+│   │   ├── RemoteCollector.ts           # HTTP POST to dashboard /api/ingest
 │   │   ├── SessionManager.ts            # Session lifecycle + idle timeout
 │   │   ├── EventBus.ts                  # Node.js EventEmitter singleton
 │   │   └── AlertEngine.ts              # P95 latency & error rate monitoring
 │   ├── ingestion/
 │   │   ├── mcp/
+│   │   │   ├── MuxServer.ts             # Multiplexing MCP server (aggregates all servers)
 │   │   │   ├── ProtocolInterceptor.ts   # JSON-RPC request/response matching
 │   │   │   ├── StdioProxy.ts            # MCP stdio transport proxy
 │   │   │   └── HttpProxy.ts            # MCP HTTP reverse proxy
