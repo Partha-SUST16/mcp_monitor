@@ -213,7 +213,6 @@ Create `mcp-monitor.config.json` in the project root:
   "alerts": {
     "latencyP95Ms": 2000,
     "errorRatePercent": 10,
-    "checkIntervalSeconds": 30,
     "cooldownMinutes": 5
   }
 }
@@ -338,10 +337,10 @@ Sessions are created and managed automatically:
 
 ## Alert System
 
-The AlertEngine polls every `checkIntervalSeconds` (default: 30s) and checks:
+The AlertEngine is fully event-driven — **no polling**. It listens to every `tool_call` event from the EventBus and evaluates thresholds in real time:
 
-- **P95 Latency** per tool over the last 5 minutes → fires if above `latencyP95Ms` threshold
-- **Error Rate** per tool over the last 5 minutes → fires if above `errorRatePercent` threshold
+- **P95 Latency** per tool → fires if above `latencyP95Ms` threshold
+- **Error Rate** per tool → fires if above `errorRatePercent` threshold (requires ≥5 calls)
 
 Cooldown logic prevents the same alert from re-firing within `cooldownMinutes` (default: 5 min). Alerts are persisted to SQLite and pushed to the dashboard via SSE.
 

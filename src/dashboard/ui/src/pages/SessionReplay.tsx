@@ -156,19 +156,19 @@ export default function SessionReplay() {
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th onClick={() => toggleSort('timestamp')} style={{ cursor: 'pointer' }}>
+                                            <th onClick={() => toggleSort('timestamp')} style={{ cursor: 'pointer', width: '12%' }}>
                                                 Time{sortIcon('timestamp')}
                                             </th>
-                                            <th onClick={() => toggleSort('toolName')} style={{ cursor: 'pointer' }}>
+                                            <th onClick={() => toggleSort('toolName')} style={{ cursor: 'pointer', width: '28%' }}>
                                                 Tool{sortIcon('toolName')}
                                             </th>
-                                            <th onClick={() => toggleSort('status')} style={{ cursor: 'pointer' }}>
+                                            <th onClick={() => toggleSort('status')} style={{ cursor: 'pointer', width: '12%' }}>
                                                 Status{sortIcon('status')}
                                             </th>
-                                            <th onClick={() => toggleSort('latencyMs')} style={{ cursor: 'pointer' }}>
+                                            <th onClick={() => toggleSort('latencyMs')} style={{ cursor: 'pointer', width: '13%' }}>
                                                 Latency{sortIcon('latencyMs')}
                                             </th>
-                                            <th style={{ width: '30%' }}>Duration</th>
+                                            <th style={{ width: '35%' }}>Duration</th>
                                         </tr>
                                     </thead>
                                     <tbody>
