@@ -54,7 +54,21 @@ Agent (Claude, Cursor, etc.)
 - Node.js 18+
 - npm
 
-### Install & Run
+### Install via GitHub Packages
+
+1. **Authenticate to GitHub Packages**: You need a Personal Access Token (classic) with the `read:packages` scope.
+2. Tell npm where to find the package:
+   ```bash
+   echo "@partha-sust16:registry=https://npm.pkg.github.com" >> ~/.npmrc
+   ```
+3. Install the package globally:
+   ```bash
+   npm install -g @partha-sust16/mcp-monitor
+   ```
+
+You are now ready to run `mcp-monitor start`!
+
+### Install from Source
 
 ```bash
 git clone https://github.com/Partha-SUST16/mcp_monitor.git

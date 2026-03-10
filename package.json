@@ -1,7 +1,14 @@
 {
-  "name": "mcp-monitor",
+  "name": "@partha-sust16/mcp-monitor",
   "version": "0.1.0",
   "description": "Transparent observability for agentic AI pipelines",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Partha-SUST16/mcp_monitor.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "main": "dist/cli.js",
   "bin": {
     "mcp-monitor": "./dist/cli.js"
