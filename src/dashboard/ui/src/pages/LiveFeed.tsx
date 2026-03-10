@@ -127,7 +127,7 @@ export default function LiveFeed() {
                                 {calls.map((call, i) => (
                                     <tr
                                         key={`${call.timestamp}-${i}`}
-                                        onClick={() => navigate(`/sessions?id=${call.sessionId}`)}
+                                        onClick={() => navigate(`/sessions?id=${call.sessionId}&callTs=${call.timestamp}`)}
                                         style={{ cursor: 'pointer' }}
                                     >
                                         <td className="mono" style={{ fontSize: '12px' }}>{timeAgo(call.timestamp)}</td>

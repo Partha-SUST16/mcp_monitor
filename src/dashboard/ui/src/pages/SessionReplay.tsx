@@ -58,12 +58,24 @@ export default function SessionReplay() {
             .then(d => {
                 setSessionInfo(d.session);
                 setCalls(d.calls);
-                setExpandedCall(null);
                 setSortField('timestamp');
                 setSortDir('asc');
+
+                // Auto-expand call if callTs is present in URL
+                const callTs = searchParams.get('callTs');
+                if (callTs) {
+                    const callToExpand = d.calls.find((c: ToolCall) => c.timestamp === callTs);
+                    if (callToExpand) {
+                        setExpandedCall(callToExpand.id);
+                    } else {
+                        setExpandedCall(null);
+                    }
+                } else {
+                    setExpandedCall(null);
+                }
             })
             .catch(() => { });
-    }, [selected]);
+    }, [selected, searchParams]);
 
     const sortedCalls = useMemo(() => {
         const sorted = [...calls].sort((a, b) => {
