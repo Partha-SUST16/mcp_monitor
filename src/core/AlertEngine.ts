@@ -1,39 +1,47 @@
-import { AlertConfig, AlertMetric } from '../types';
+import { AlertConfig, AlertMetric, CollectorEvent } from '../types';
 import { store } from './Store';
 import { eventBus } from './EventBus';
 
 export class AlertEngine {
     private cooldowns = new Map<string, number>();
-    private timer: ReturnType<typeof setInterval> | null = null;
+    private recentCalls = new Map<string, { total: number; errors: number; latencies: number[] }>();
 
     constructor(private config: AlertConfig) { }
 
     start() {
-        this.timer = setInterval(() => this.run(), this.config.checkIntervalSeconds * 1000);
+        eventBus.on('tool_call', (event: CollectorEvent) => this.onToolCall(event));
     }
 
-    stop() {
-        if (this.timer) {
-            clearInterval(this.timer);
-            this.timer = null;
-        }
-    }
-
-    private run() {
-        const since = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-
-        const latencies = store.getP95LatencyByTool(since);
-        for (const { toolName, serverName, p95 } of latencies) {
-            if (p95 > this.config.latencyP95Ms) {
-                this.maybeFireAlert(toolName, serverName, 'latency_p95', p95, this.config.latencyP95Ms);
-            }
+    private onToolCall(event: CollectorEvent) {
+        const key = `${event.serverName}:${event.toolName}`;
+        let bucket = this.recentCalls.get(key);
+        if (!bucket) {
+            bucket = { total: 0, errors: 0, latencies: [] };
+            this.recentCalls.set(key, bucket);
         }
 
-        const errorRates = store.getErrorRateByTool(since);
-        for (const { toolName, serverName, rate } of errorRates) {
-            if (rate > this.config.errorRatePercent) {
-                this.maybeFireAlert(toolName, serverName, 'error_rate', rate, this.config.errorRatePercent);
-            }
+        bucket.total++;
+        bucket.latencies.push(event.latencyMs);
+        if (event.status === 'error') bucket.errors++;
+
+        // Trim old data every 100 calls per tool to keep memory bounded
+        if (bucket.latencies.length > 200) {
+            const half = Math.floor(bucket.latencies.length / 2);
+            bucket.latencies = bucket.latencies.slice(half);
+            bucket.total = bucket.latencies.length;
+            bucket.errors = Math.max(0, bucket.errors - half);
+        }
+
+        const sorted = [...bucket.latencies].sort((a, b) => a - b);
+        const p95Idx = Math.min(Math.floor(sorted.length * 0.95), sorted.length - 1);
+        const p95 = sorted[p95Idx];
+        if (p95 > this.config.latencyP95Ms) {
+            this.maybeFireAlert(event.toolName, event.serverName, 'latency_p95', p95, this.config.latencyP95Ms);
+        }
+
+        const errorRate = (bucket.errors / bucket.total) * 100;
+        if (bucket.total >= 5 && errorRate > this.config.errorRatePercent) {
+            this.maybeFireAlert(event.toolName, event.serverName, 'error_rate', errorRate, this.config.errorRatePercent);
         }
     }
 
