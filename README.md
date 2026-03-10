@@ -136,6 +136,8 @@ mcp-monitor start
 
 The agent sees one MCP server with all tools combined. MCP Monitor spawns each real server internally, routes every `tools/call` to the correct child, and records the call.
 
+> **Note on Tool Names**: To prevent naming collisions between different MCP servers that happen to expose identical tools, the Multiplexer prefixes all tool names with their originating server's name. For example, if your `filesystem` server has a tool named `read_file`, the LLM will see it exposed as `filesystem_read_file`.
+
 ### Per-Server Proxy Mode
 
 Alternatively, wrap individual servers by replacing their command:
