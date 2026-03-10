@@ -64,11 +64,11 @@ cd mcp-monitor
 # Install backend dependencies
 npm install
 
-# Install and build the dashboard UI
-cd src/dashboard/ui && npm install && npx vite build && cd ../../..
+# Build the backend and the dashboard UI automatically
+npm run build
 
-# Build and link globally
-npm run build && npm link
+# Link globally to use the 'mcp-monitor' command anywhere
+npm link
 
 # Start the dashboard server
 mcp-monitor start
@@ -99,7 +99,7 @@ curl -X POST http://localhost:4242/api/ingest \
 
 ## Connecting Agents
 
-### Multiplexer Mode (Recommended)
+### Multiplexer Mode
 
 Monitor **all** MCP servers with a single config entry. No need to wrap each server individually.
 
