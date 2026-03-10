@@ -86,13 +86,7 @@ export default function SessionReplay() {
     };
 
     const maxLatency = Math.max(...calls.map(c => c.latencyMs), 1);
-
-    // Waterfall chart: position bars by start time relative to session, width by duration
-    const sessionStart = calls.length > 0 ? Math.min(...calls.map(c => new Date(c.timestamp).getTime())) : 0;
-    const sessionEnd = calls.length > 0
-        ? Math.max(...calls.map(c => new Date(c.timestamp).getTime() + c.latencyMs))
-        : 1;
-    const sessionSpan = Math.max(sessionEnd - sessionStart, 1);
+    const logNorm = (ms: number) => Math.max((Math.log(ms + 1) / Math.log(maxLatency + 1)) * 100, 3);
 
     return (
         <div>
@@ -141,31 +135,20 @@ export default function SessionReplay() {
 
                             {calls.length > 0 && (
                                 <div className="gantt-chart">
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'SF Mono, Fira Code, monospace' }}>
-                                        <span>0ms</span>
-                                        <span>{Math.round(sessionSpan / 2)}ms</span>
-                                        <span>{Math.round(sessionSpan)}ms</span>
-                                    </div>
-                                    {calls.slice(0, 20).map((call) => {
-                                        const callStart = new Date(call.timestamp).getTime() - sessionStart;
-                                        const leftPct = (callStart / sessionSpan) * 100;
-                                        const widthPct = Math.max((call.latencyMs / sessionSpan) * 100, 1.5);
-                                        return (
-                                            <div key={call.id} className="gantt-bar" style={{ background: 'var(--bg-input)' }}>
-                                                <div
-                                                    className="gantt-bar-fill"
-                                                    style={{
-                                                        left: `${leftPct}%`,
-                                                        width: `${widthPct}%`,
-                                                        background: call.status === 'error'
-                                                            ? 'var(--error)'
-                                                            : 'var(--gradient-1)',
-                                                    }}
-                                                />
-                                                <span className="gantt-bar-label">{call.toolName} ({call.latencyMs}ms)</span>
-                                            </div>
-                                        );
-                                    })}
+                                    {calls.slice(0, 20).map((call) => (
+                                        <div key={call.id} className="gantt-bar" style={{ background: 'var(--bg-input)' }}>
+                                            <div
+                                                className="gantt-bar-fill"
+                                                style={{
+                                                    width: `${logNorm(call.latencyMs)}%`,
+                                                    background: call.status === 'error'
+                                                        ? 'var(--error)'
+                                                        : 'var(--gradient-1)',
+                                                }}
+                                            />
+                                            <span className="gantt-bar-label">{call.toolName}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
 
