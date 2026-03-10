@@ -144,7 +144,7 @@ export default function SessionReplay() {
                             {calls.length > 0 && ganttVisible && (
                                 <div className="gantt-chart">
                                     {calls.slice(0, 20).map((call) => (
-                                        <div key={call.id} className="gantt-bar" title={`${call.toolName} — ${call.latencyMs}ms`} style={{ background: 'var(--bg-input)' }}>
+                                        <div key={call.id} className="gantt-bar" data-tooltip={`${call.toolName} — ${call.latencyMs}ms`} style={{ background: 'var(--bg-input)' }}>
                                             <div
                                                 className="gantt-bar-fill"
                                                 style={{
