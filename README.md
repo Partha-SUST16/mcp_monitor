@@ -18,7 +18,6 @@ MCP Monitor intercepts every tool call made by an AI agent — whether the agent
 - 🖥️ **Server Health** — Per-server status cards (healthy / degraded / down) with auto-refresh
 - 🔔 **Alerts** — Configurable P95 latency and error rate thresholds with cooldown-based alerting
 - 🔒 **Secret Sanitization** — Automatically redacts tokens, passwords, API keys from stored arguments
-- ✂️ **Response Truncation** — Large responses (>10KB) are intelligently truncated before storage
 - 🐍 **Python SDK** — Zero-dependency pip package to monitor any Python agent (QwenAgent, LangChain, custom)
 - 💾 **SQLite Storage** — Single-file database with WAL mode for fast concurrent reads
 
