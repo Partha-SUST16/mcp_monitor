@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface ToolCall {
     sessionId: string;
@@ -25,6 +26,7 @@ export default function LiveFeed() {
     const [overview, setOverview] = useState<any>(null);
     const pausedRef = useRef(paused);
     pausedRef.current = paused;
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetch('/api/overview')
@@ -123,7 +125,11 @@ export default function LiveFeed() {
                             </thead>
                             <tbody>
                                 {calls.map((call, i) => (
-                                    <tr key={`${call.timestamp}-${i}`}>
+                                    <tr
+                                        key={`${call.timestamp}-${i}`}
+                                        onClick={() => navigate(`/sessions?id=${call.sessionId}`)}
+                                        style={{ cursor: 'pointer' }}
+                                    >
                                         <td className="mono" style={{ fontSize: '12px' }}>{timeAgo(call.timestamp)}</td>
                                         <td><span className="badge badge-accent">{call.agentType}</span></td>
                                         <td>{call.serverName}</td>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 interface Session {
     id: string;
@@ -28,14 +29,22 @@ function formatTime(ts: string) {
 }
 
 export default function SessionReplay() {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const initialSessionId = searchParams.get('id');
+
     const [sessions, setSessions] = useState<Session[]>([]);
-    const [selected, setSelected] = useState<string | null>(null);
+    const [selected, setSelected] = useState<string | null>(initialSessionId);
     const [calls, setCalls] = useState<ToolCall[]>([]);
     const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
     const [expandedCall, setExpandedCall] = useState<number | null>(null);
     const [sortField, setSortField] = useState<SortField>('timestamp');
     const [sortDir, setSortDir] = useState<SortDir>('asc');
     const [ganttVisible, setGanttVisible] = useState(true);
+
+    const handleSelectSession = (id: string) => {
+        setSelected(id);
+        setSearchParams({ id });
+    };
 
     useEffect(() => {
         fetch('/api/sessions?limit=50')
@@ -108,7 +117,7 @@ export default function SessionReplay() {
                                 <div
                                     key={s.id}
                                     className={`session-item ${selected === s.id ? 'active' : ''}`}
-                                    onClick={() => setSelected(s.id)}
+                                    onClick={() => handleSelectSession(s.id)}
                                 >
                                     <div className="session-item-name">{s.serverName}</div>
                                     <div className="session-item-meta">
