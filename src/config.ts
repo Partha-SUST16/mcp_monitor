@@ -11,6 +11,13 @@ const DEFAULT_CONFIG: Config = {
         checkIntervalSeconds: 30,
         cooldownMinutes: 5,
     },
+    // Defaults model a typical mid-tier frontier model ($3 / $15 per 1M tokens).
+    // These are estimates — override per-server in config to match your backends.
+    pricing: {
+        charsPerToken: 4,
+        inputPerMillion: 3.0,
+        outputPerMillion: 15.0,
+    },
 };
 
 export function loadConfig(configPath?: string): Config {
@@ -45,6 +52,12 @@ export function loadConfig(configPath?: string): Config {
             errorRatePercent: raw.alerts?.errorRatePercent ?? 10,
             checkIntervalSeconds: raw.alerts?.checkIntervalSeconds ?? 30,
             cooldownMinutes: raw.alerts?.cooldownMinutes ?? 5,
+        },
+        pricing: {
+            charsPerToken: raw.pricing?.charsPerToken ?? 4,
+            inputPerMillion: raw.pricing?.inputPerMillion ?? 3.0,
+            outputPerMillion: raw.pricing?.outputPerMillion ?? 15.0,
+            perServer: raw.pricing?.perServer ?? undefined,
         },
     };
 

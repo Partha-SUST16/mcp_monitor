@@ -70,12 +70,14 @@ export class HttpProxy {
             let resJson: any = null;
             let status: 'success' | 'error' = 'success';
             let errorMsg: string | undefined;
+            let errorCode: number | undefined;
 
             try {
                 resJson = JSON.parse(responseBody);
                 if (resJson.error) {
                     status = 'error';
                     errorMsg = resJson.error.message;
+                    errorCode = resJson.error.code;
                 }
             } catch { /* non-JSON response */ }
 
@@ -91,6 +93,7 @@ export class HttpProxy {
                 latencyMs: Date.now() - startTime,
                 timestamp,
                 errorMsg,
+                errorCode,
             };
 
             collector.handle(event);

@@ -1,6 +1,13 @@
-import { CollectorEvent, ResponsePayload } from '../types';
+import { CollectorEvent, ResponsePayload, PricingConfig } from '../types';
 import { store } from './Store';
 import { eventBus } from './EventBus';
+import { classifyError } from './classify';
+
+const DEFAULT_PRICING: PricingConfig = {
+    charsPerToken: 4,
+    inputPerMillion: 3.0,
+    outputPerMillion: 15.0,
+};
 
 const SECRET_KEYS = ['token', 'key', 'secret', 'password', 'auth', 'api_key',
     'apikey', 'credential', 'bearer', 'authorization'];
@@ -51,20 +58,59 @@ function truncateResponse(raw: unknown): ResponsePayload {
 }
 
 class Collector {
+    private pricing: PricingConfig = DEFAULT_PRICING;
+
+    // Called once at dashboard startup (cli.ts `start`). Because every ingestion
+    // path — multiplexer, per-server proxy, Python SDK — converges on this single
+    // handle() in the dashboard process, configuring pricing here enriches all of
+    // them. Pricing is intentionally a single source of truth in the dashboard.
+    configure(pricing?: PricingConfig) {
+        if (pricing) this.pricing = { ...this.pricing, ...pricing };
+    }
+
     handle(event: CollectorEvent) {
         const sanitizedArgs = sanitize(event.arguments);
         const response = event.response
             ? (event.response.truncated !== undefined ? event.response : truncateResponse(event.response))
             : (event.response === null ? null : truncateResponse(event.response));
 
+        const { inputTokens, outputTokens, costUsd } = this.estimateUsage(
+            sanitizedArgs,
+            response as ResponsePayload | null,
+            event.serverName,
+        );
+
         const processed: CollectorEvent = {
             ...event,
             arguments: sanitizedArgs,
             response: response as ResponsePayload | null,
+            inputTokens,
+            outputTokens,
+            costUsd,
+            errorClass: classifyError(event),
         };
 
         store.insertToolCall(processed);
         eventBus.emit('tool_call', processed);
+    }
+
+    // Estimate tokens from byte size. We deliberately use the ORIGINAL pre-truncation
+    // size for output (response.sizeBytes) — truncation is a display/storage concern,
+    // not an accounting one; the model still consumed the full payload.
+    private estimateUsage(args: unknown, response: ResponsePayload | null, serverName: string) {
+        const cpt = this.pricing.charsPerToken || 4;
+        const argBytes = Buffer.byteLength(JSON.stringify(args ?? null), 'utf8');
+        const outBytes = response?.sizeBytes ?? 0;
+
+        const inputTokens = Math.ceil(argBytes / cpt);
+        const outputTokens = Math.ceil(outBytes / cpt);
+
+        const rate = this.pricing.perServer?.[serverName] ?? this.pricing;
+        const costUsd =
+            (inputTokens / 1_000_000) * rate.inputPerMillion +
+            (outputTokens / 1_000_000) * rate.outputPerMillion;
+
+        return { inputTokens, outputTokens, costUsd };
     }
 }
 

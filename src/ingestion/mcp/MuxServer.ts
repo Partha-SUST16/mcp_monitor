@@ -262,6 +262,7 @@ export class MuxServer {
             arguments: msg.params,
             response: res.error ?? res.result,
             errorMsg: res.error ? JSON.stringify(res.error) : undefined,
+            errorCode: res.error?.code,
             status,
             latencyMs,
             timestamp,
