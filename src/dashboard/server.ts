@@ -8,6 +8,9 @@ import { createSessionsRouter } from './routes/sessions';
 import { createToolsRouter } from './routes/tools';
 import { createServersRouter } from './routes/servers';
 import { createAlertsRouter } from './routes/alerts';
+import { createTokensRouter } from './routes/tokens';
+import { createCostRouter } from './routes/cost';
+import { createErrorsRouter } from './routes/errors';
 import { createIngestRouter } from '../ingestion/IngestEndpoint';
 
 export function createDashboardServer(port: number) {
@@ -19,6 +22,9 @@ export function createDashboardServer(port: number) {
     app.use('/api', createToolsRouter());
     app.use('/api', createServersRouter());
     app.use('/api', createAlertsRouter());
+    app.use('/api', createTokensRouter());
+    app.use('/api', createCostRouter());
+    app.use('/api', createErrorsRouter());
     app.use('/api', createIngestRouter());
 
     app.get('/api/stream', (req: Request, res: Response) => {

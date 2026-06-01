@@ -24,6 +24,9 @@ program
     .option('-c, --config <path>', 'config file path', './mcp-monitor.config.json')
     .action((opts) => {
         const config = loadConfig(opts.config);
+        // Pricing lives in the dashboard process as the single source of truth:
+        // every ingestion path POSTs here, so configuring once enriches them all.
+        collector.configure(config.pricing);
         createDashboardServer(config.dashboard.port);
 
         const alertEngine = new AlertEngine(config.alerts);
@@ -120,6 +123,29 @@ program
         });
 
         console.log(JSON.stringify({ tools: sorted }, null, 2));
+    });
+
+program
+    .command('cost')
+    .description('Show estimated token usage and cost broken down by node and session')
+    .option('--format <fmt>', 'json | csv', 'json')
+    .option('--since <duration>', '1h | 6h | 24h | 7d', '24h')
+    .action(async (opts) => {
+        const sinceMap: Record<string, number> = {
+            '1h': 3600000, '6h': 21600000, '24h': 86400000, '7d': 604800000,
+        };
+        const since = new Date(Date.now() - (sinceMap[opts.since] ?? 86400000)).toISOString();
+        const data = store.getCostBreakdown(since);
+
+        if (opts.format === 'csv') {
+            const header = 'serverName,toolName,callCount,inputTokens,outputTokens,costUsd';
+            const rows = data.byNode.map((n: any) =>
+                `${n.serverName},${n.toolName},${n.callCount},${n.inputTokens},${n.outputTokens},${n.costUsd.toFixed(6)}`
+            );
+            console.log([header, ...rows].join('\n'));
+        } else {
+            console.log(JSON.stringify(data, null, 2));
+        }
     });
 
 program
