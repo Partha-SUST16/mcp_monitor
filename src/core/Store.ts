@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import { ToolCallRow, AlertEvent, Session, AlertMetric } from '../types';
+import { ToolCallRow, AlertEvent, Session, AlertMetric, ErrorClass } from '../types';
 
 class Store {
     private db: Database.Database;
@@ -10,6 +10,7 @@ class Store {
         this.db = new Database(resolvedPath);
         this.db.pragma('journal_mode = WAL');
         this.initialize();
+        this.migrate();
     }
 
     private initialize() {
@@ -23,18 +24,23 @@ class Store {
       );
 
       CREATE TABLE IF NOT EXISTS tool_calls (
-        id           INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id   TEXT NOT NULL REFERENCES sessions(id),
-        agent_type   TEXT NOT NULL,
-        server_name  TEXT NOT NULL,
-        tool_name    TEXT NOT NULL,
-        method       TEXT NOT NULL,
-        arguments    TEXT,
-        response     TEXT,
-        status       TEXT NOT NULL,
-        latency_ms   INTEGER NOT NULL,
-        timestamp    TEXT NOT NULL,
-        error_msg    TEXT
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id    TEXT NOT NULL REFERENCES sessions(id),
+        agent_type    TEXT NOT NULL,
+        server_name   TEXT NOT NULL,
+        tool_name     TEXT NOT NULL,
+        method        TEXT NOT NULL,
+        arguments     TEXT,
+        response      TEXT,
+        status        TEXT NOT NULL,
+        latency_ms    INTEGER NOT NULL,
+        timestamp     TEXT NOT NULL,
+        error_msg     TEXT,
+        error_code    INTEGER,
+        input_tokens  INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        cost_usd      REAL NOT NULL DEFAULT 0,
+        error_class   TEXT
       );
 
       CREATE TABLE IF NOT EXISTS alert_events (
@@ -52,6 +58,23 @@ class Store {
       CREATE INDEX IF NOT EXISTS idx_time       ON tool_calls(timestamp);
       CREATE INDEX IF NOT EXISTS idx_server     ON tool_calls(server_name, timestamp);
     `);
+    }
+
+    // Idempotent column adds for databases created before token/cost/error-class
+    // tracking existed. CREATE TABLE IF NOT EXISTS won't alter an existing table,
+    // so we diff against PRAGMA table_info and ADD COLUMN for anything missing.
+    // No-op on fresh DBs (the columns are already in the CREATE above). The
+    // error_class index is created here — after the column is guaranteed present —
+    // because on an old DB it would not yet exist when initialize() runs.
+    private migrate() {
+        const cols = this.db.pragma('table_info(tool_calls)') as { name: string }[];
+        const has = (c: string) => cols.some(col => col.name === c);
+        if (!has('error_code')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN error_code INTEGER');
+        if (!has('input_tokens')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN input_tokens INTEGER NOT NULL DEFAULT 0');
+        if (!has('output_tokens')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0');
+        if (!has('cost_usd')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN cost_usd REAL NOT NULL DEFAULT 0');
+        if (!has('error_class')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN error_class TEXT');
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_error_class ON tool_calls(error_class, timestamp)');
     }
 
     sessionExists(sessionId: string): boolean {
@@ -82,10 +105,15 @@ class Store {
         latencyMs: number;
         timestamp: string;
         errorMsg?: string;
+        errorCode?: number;
+        inputTokens?: number;
+        outputTokens?: number;
+        costUsd?: number;
+        errorClass?: ErrorClass | null;
     }) {
         this.db.prepare(`
-      INSERT INTO tool_calls (session_id, agent_type, server_name, tool_name, method, arguments, response, status, latency_ms, timestamp, error_msg)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tool_calls (session_id, agent_type, server_name, tool_name, method, arguments, response, status, latency_ms, timestamp, error_msg, error_code, input_tokens, output_tokens, cost_usd, error_class)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
             event.sessionId,
             event.agentType,
@@ -97,7 +125,12 @@ class Store {
             event.status,
             event.latencyMs,
             event.timestamp,
-            event.errorMsg ?? null
+            event.errorMsg ?? null,
+            event.errorCode ?? null,
+            event.inputTokens ?? 0,
+            event.outputTokens ?? 0,
+            event.costUsd ?? 0,
+            event.errorClass ?? null
         );
     }
 
@@ -112,7 +145,9 @@ class Store {
       SELECT
         COUNT(*) as totalCalls,
         SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as errorCount,
-        AVG(latency_ms) as avgLatency
+        AVG(latency_ms) as avgLatency,
+        SUM(input_tokens + output_tokens) as totalTokens,
+        SUM(cost_usd) as totalCost
       FROM tool_calls WHERE timestamp > ?
     `).get(since24h) as any;
 
@@ -138,6 +173,8 @@ class Store {
             avgLatencyMs: Math.round(stats?.avgLatency ?? 0),
             p95LatencyMs: p95,
             activeServers: serverCount?.cnt ?? 0,
+            totalTokens24h: stats?.totalTokens ?? 0,
+            totalCostUsd24h: stats?.totalCost ?? 0,
             recentCalls: recentCalls.map(r => this.deserializeRow(r)),
         };
     }
@@ -347,6 +384,166 @@ class Store {
         }));
     }
 
+    // ---- Token usage (Feature: per-agent-node token tracking) -------------------
+    // A "node" is a (serverName, toolName) pair — a single addressable tool in the
+    // agent's tool graph. We also break down by agentType. Token counts are summed
+    // straight from the columns written at ingest time (no recompute on read).
+    getTokenUsage(since: string) {
+        const byNode = this.db.prepare(`
+      SELECT server_name, tool_name,
+        COUNT(*) as call_count,
+        SUM(input_tokens) as input_tokens,
+        SUM(output_tokens) as output_tokens,
+        SUM(cost_usd) as cost_usd
+      FROM tool_calls WHERE timestamp > ?
+      GROUP BY server_name, tool_name
+      ORDER BY (SUM(input_tokens) + SUM(output_tokens)) DESC
+    `).all(since) as any[];
+
+        const byAgentType = this.db.prepare(`
+      SELECT agent_type,
+        COUNT(*) as call_count,
+        SUM(input_tokens) as input_tokens,
+        SUM(output_tokens) as output_tokens,
+        SUM(cost_usd) as cost_usd
+      FROM tool_calls WHERE timestamp > ?
+      GROUP BY agent_type
+      ORDER BY (SUM(input_tokens) + SUM(output_tokens)) DESC
+    `).all(since) as any[];
+
+        const rows = this.db.prepare(
+            'SELECT input_tokens, output_tokens, timestamp FROM tool_calls WHERE timestamp > ? ORDER BY timestamp ASC'
+        ).all(since) as any[];
+
+        return {
+            byNode: byNode.map(r => ({
+                serverName: r.server_name,
+                toolName: r.tool_name,
+                callCount: r.call_count,
+                inputTokens: r.input_tokens ?? 0,
+                outputTokens: r.output_tokens ?? 0,
+                totalTokens: (r.input_tokens ?? 0) + (r.output_tokens ?? 0),
+                costUsd: r.cost_usd ?? 0,
+            })),
+            byAgentType: byAgentType.map(r => ({
+                agentType: r.agent_type,
+                callCount: r.call_count,
+                inputTokens: r.input_tokens ?? 0,
+                outputTokens: r.output_tokens ?? 0,
+                totalTokens: (r.input_tokens ?? 0) + (r.output_tokens ?? 0),
+                costUsd: r.cost_usd ?? 0,
+            })),
+            timeseries: this.buildTimeseries(rows, (bucket) => ({
+                inputTokens: bucket.reduce((s: number, r: any) => s + (r.input_tokens ?? 0), 0),
+                outputTokens: bucket.reduce((s: number, r: any) => s + (r.output_tokens ?? 0), 0),
+            })),
+        };
+    }
+
+    // ---- Cost breakdown (Feature: cost estimator) -------------------------------
+    getCostBreakdown(since: string) {
+        const byNode = this.db.prepare(`
+      SELECT server_name, tool_name,
+        COUNT(*) as call_count,
+        SUM(input_tokens) as input_tokens,
+        SUM(output_tokens) as output_tokens,
+        SUM(cost_usd) as cost_usd
+      FROM tool_calls WHERE timestamp > ?
+      GROUP BY server_name, tool_name
+      ORDER BY SUM(cost_usd) DESC
+    `).all(since) as any[];
+
+        const bySession = this.db.prepare(`
+      SELECT t.session_id, s.server_name, s.started_at, s.label,
+        COUNT(*) as call_count,
+        SUM(t.cost_usd) as cost_usd,
+        SUM(t.input_tokens + t.output_tokens) as total_tokens
+      FROM tool_calls t LEFT JOIN sessions s ON s.id = t.session_id
+      WHERE t.timestamp > ?
+      GROUP BY t.session_id
+      ORDER BY SUM(t.cost_usd) DESC
+      LIMIT 50
+    `).all(since) as any[];
+
+        const rows = this.db.prepare(
+            'SELECT cost_usd, timestamp FROM tool_calls WHERE timestamp > ? ORDER BY timestamp ASC'
+        ).all(since) as any[];
+
+        const total = this.db.prepare(
+            'SELECT SUM(cost_usd) as cost, SUM(input_tokens + output_tokens) as tokens FROM tool_calls WHERE timestamp > ?'
+        ).get(since) as any;
+
+        return {
+            byNode: byNode.map(r => ({
+                serverName: r.server_name,
+                toolName: r.tool_name,
+                callCount: r.call_count,
+                inputTokens: r.input_tokens ?? 0,
+                outputTokens: r.output_tokens ?? 0,
+                costUsd: r.cost_usd ?? 0,
+            })),
+            bySession: bySession.map(r => ({
+                sessionId: r.session_id,
+                serverName: r.server_name,
+                startedAt: r.started_at,
+                label: r.label,
+                callCount: r.call_count,
+                totalTokens: r.total_tokens ?? 0,
+                costUsd: r.cost_usd ?? 0,
+            })),
+            timeseries: this.buildTimeseries(rows, (bucket) => ({
+                costUsd: bucket.reduce((s: number, r: any) => s + (r.cost_usd ?? 0), 0),
+            })),
+            totalUsd: total?.cost ?? 0,
+            totalTokens: total?.tokens ?? 0,
+        };
+    }
+
+    // ---- Error classification (Feature: hallucination vs failure vs timeout) ----
+    getErrorClassification(since: string) {
+        const byClass = this.db.prepare(`
+      SELECT COALESCE(error_class, 'unclassified') as error_class, COUNT(*) as count
+      FROM tool_calls
+      WHERE timestamp > ? AND status != 'success'
+      GROUP BY error_class
+    `).all(since) as any[];
+
+        const errorRows = this.db.prepare(
+            "SELECT error_class, timestamp FROM tool_calls WHERE timestamp > ? AND status != 'success' ORDER BY timestamp ASC"
+        ).all(since) as any[];
+
+        const recent = this.db.prepare(`
+      SELECT id, session_id, server_name, tool_name, status, error_class, error_code, error_msg, timestamp
+      FROM tool_calls
+      WHERE timestamp > ? AND status != 'success'
+      ORDER BY timestamp DESC LIMIT 50
+    `).all(since) as any[];
+
+        const CLASSES: ErrorClass[] = ['hallucination', 'tool_failure', 'timeout'];
+
+        return {
+            byClass: byClass.map(r => ({ errorClass: r.error_class as string, count: r.count })),
+            timeseries: this.buildTimeseries(errorRows, (bucket) => {
+                const out: Record<string, number> = {};
+                for (const cls of CLASSES) {
+                    out[cls] = bucket.filter((r: any) => r.error_class === cls).length;
+                }
+                return out;
+            }),
+            recentErrors: recent.map(r => ({
+                id: r.id,
+                sessionId: r.session_id,
+                serverName: r.server_name,
+                toolName: r.tool_name,
+                status: r.status,
+                errorClass: r.error_class as ErrorClass | null,
+                errorCode: r.error_code ?? null,
+                errorMsg: r.error_msg,
+                timestamp: r.timestamp,
+            })),
+        };
+    }
+
     private percentile(sorted: number[], pct: number): number {
         if (sorted.length === 0) return 0;
         const idx = Math.floor(sorted.length * pct);
@@ -384,6 +581,11 @@ class Store {
             latencyMs: row.latency_ms,
             timestamp: row.timestamp,
             errorMsg: row.error_msg,
+            errorCode: row.error_code ?? null,
+            inputTokens: row.input_tokens ?? 0,
+            outputTokens: row.output_tokens ?? 0,
+            costUsd: row.cost_usd ?? 0,
+            errorClass: row.error_class ?? null,
         };
     }
 

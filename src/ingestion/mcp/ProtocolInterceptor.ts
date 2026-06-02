@@ -72,6 +72,7 @@ export class ProtocolInterceptor {
                         latencyMs: Date.now() - req.startTime,
                         timestamp: req.timestamp,
                         errorMsg: msg.error?.message,
+                        errorCode: msg.error?.code,
                     });
                 }
             } catch { /* non-JSON */ }
