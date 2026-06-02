@@ -4,6 +4,8 @@ import SessionReplay from './pages/SessionReplay';
 import ToolAnalytics from './pages/ToolAnalytics';
 import ServerHealth from './pages/ServerHealth';
 import Alerts from './pages/Alerts';
+import TokenCost from './pages/TokenCost';
+import Errors from './pages/Errors';
 
 export default function App() {
     return (
@@ -24,6 +26,12 @@ export default function App() {
                         <NavLink to="/tools" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                             <span className="nav-icon">📊</span> Tool Analytics
                         </NavLink>
+                        <NavLink to="/tokens" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                            <span className="nav-icon">💰</span> Tokens &amp; Cost
+                        </NavLink>
+                        <NavLink to="/errors" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                            <span className="nav-icon">🚨</span> Errors
+                        </NavLink>
                         <NavLink to="/servers" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                             <span className="nav-icon">🖥️</span> Server Health
                         </NavLink>
@@ -37,6 +45,8 @@ export default function App() {
                         <Route path="/" element={<LiveFeed />} />
                         <Route path="/sessions" element={<SessionReplay />} />
                         <Route path="/tools" element={<ToolAnalytics />} />
+                        <Route path="/tokens" element={<TokenCost />} />
+                        <Route path="/errors" element={<Errors />} />
                         <Route path="/servers" element={<ServerHealth />} />
                         <Route path="/alerts" element={<Alerts />} />
                     </Routes>

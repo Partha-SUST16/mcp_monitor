@@ -705,3 +705,46 @@ tbody td {
 .mb-4 {
   margin-bottom: 16px;
 }
+/* ---- Utility helpers added for new pages ---- */
+.justify-between { justify-content: space-between; }
+.mb-2 { margin-bottom: 8px; }
+
+/* ---- Error-class badges (shared by Errors page + Session Replay) ---- */
+.badge-class-hallucination { background: rgba(168, 85, 247, 0.12); color: #c084fc; }
+.badge-class-tool_failure { background: var(--error-bg); color: var(--error); }
+.badge-class-timeout { background: var(--warning-bg); color: var(--warning); }
+.badge-class-unclassified { background: var(--border); color: var(--text-muted); }
+
+/* ---- Session Replay row selected for diff ---- */
+.row-selected > td { background: rgba(99, 102, 241, 0.08); }
+
+/* ---- Line diff view (Session Replay) ---- */
+.diff-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.diff-pre {
+  margin: 0;
+  overflow-x: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  background: var(--bg-input, #0f1117);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+}
+.diff-line {
+  white-space: pre;
+  padding: 0 4px;
+  border-radius: 2px;
+}
+.diff-gutter {
+  display: inline-block;
+  width: 12px;
+  color: var(--text-muted);
+  user-select: none;
+}
+.diff-add { background: rgba(16, 185, 129, 0.16); color: #6ee7b7; }
+.diff-del { background: rgba(248, 113, 113, 0.16); color: #fca5a5; }
+.diff-eq { color: var(--text-muted); }
